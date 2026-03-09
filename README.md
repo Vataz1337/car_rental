@@ -165,4 +165,3 @@ Features that could be added in a production system:
 * Reservation cancellation endpoint
 * Additional GET endpoints for querying reservations
 * Database indexing on `reservation(car_id, start_date, end_date)` for performance
-* Timezone-aware reservation handling
