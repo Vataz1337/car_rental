@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: carrental
+      POSTGRES_USER: carrental
+      POSTGRES_DB: carrental
+    volumes:
+      - carrental_pgdata:/var/lib/postgresql/data
+    networks:
+      - carrental_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carrental"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  carrental_net:
+
+volumes:
+  carrental_pgdata:
