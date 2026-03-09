@@ -1,20 +1,31 @@
-# Car Rental System
+# Car Rental Reservation System
 
-A simulated Car Rental reservation system built with Spring Boot, PostgreSQL, and Liquibase.
+A simple **Car Rental reservation API** built with **Spring Boot** and **PostgreSQL**.
+The system allows renters to create reservations while ensuring that a car cannot be double-booked for overlapping periods.
 
-## Tech Stack
+The project demonstrates **REST API design, database modeling, concurrency handling, and integration testing**.
 
-- **Java 21**
-- **Spring Boot 3.4.5** (Web, Data JPA, Validation)
-- **PostgreSQL 16**
-- **Liquibase** — schema migrations and seed data
-- **Docker Compose** — local database setup
-- **Testcontainers** — integration tests against a real PostgreSQL instance
-- **REST Assured** — HTTP-level integration testing
+---
 
-## Architecture
+# Tech Stack
 
-Standard MVC layered architecture:
+* **Java 21**
+* **Spring Boot 3**
+
+    * Spring Web
+    * Spring Data JPA
+    * Validation
+* **PostgreSQL**
+* **Liquibase** – database schema and seed data
+* **Docker Compose** – local PostgreSQL setup
+* **Testcontainers** – integration tests with real PostgreSQL
+* **REST Assured** – API testing
+
+---
+
+# Architecture
+
+The project follows a **standard layered architecture**:
 
 ```
 Controller → Service → Repository
@@ -22,73 +33,66 @@ Controller → Service → Repository
 
 ```
 com.carrental
-├── controller       # REST endpoints
-├── service          # Business logic
-├── repository       # Spring Data JPA repositories
-├── model            # JPA entities (Car, Renter, Reservation)
-├── dto              # Request/Response records
-├── enums            # CarType (SEDAN, SUV, VAN)
-└── exception        # GlobalExceptionHandler, CarNotAvailableException
+├── controller
+├── service
+├── repository
+├── model
+├── dto
+├── enums
+└── exception
 ```
 
-## Data Model
+* **Controller** – REST endpoints
+* **Service** – business logic
+* **Repository** – Spring Data JPA persistence layer
+* **DTOs** – request/response models
+* **Entities** – JPA domain objects
 
-| Table         | Description                              |
-|---------------|------------------------------------------|
-| `car`         | Fleet inventory with type and model      |
-| `renter`      | Person making the reservation            |
-| `reservation` | Links car and renter with rental period  |
+---
 
-Renters are deduplicated by email — a returning renter is reused rather than inserted again.
+# Core Business Logic
 
-## Running Locally
+Key rules implemented in the system:
 
-**Prerequisites:** Docker, Java 21, Maven
+* A reservation must be created **at least 1 hour in advance**
+* Maximum rental period is **90 days**
+* A car can only be reserved if it is **available for the entire requested time period**
+* **Overlapping reservations are prevented**
+* **Pessimistic database locking** is used to safely handle concurrent reservation requests
 
-**1. Start the database**
-```bash
-docker compose up -d
-```
+---
 
-**2. Run the application**
-```bash
-./mvnw spring-boot:run
-```
+# API
 
-The app starts on `http://localhost:8080`. Liquibase runs automatically on startup — schema and seed data are applied.
-
-## API
-
-### Create a Reservation
+### Create Reservation
 
 ```
 POST /api/v1/reservations
 ```
 
-**Request body:**
+Example request:
+
 ```json
 {
   "renterName": "John Doe",
   "renterEmail": "john@example.com",
   "carType": "SEDAN",
   "startDate": "2025-07-01T10:00:00",
-  "endDate": "2025-07-05T10:00:00"
+  "numberOfDays": 4
 }
 ```
 
-**Responses:**
+Successful response:
 
-| Status | Description                                      |
-|--------|--------------------------------------------------|
-| `201`  | Reservation created successfully                 |
-| `400`  | Validation failed (past date, null fields, etc.) |
-| `409`  | No car of requested type available for the period|
-| `503`  | System busy due to concurrent requests           |
+```
+201 Created
+```
 
-**Response body:**
+Example response:
+
 ```json
 {
-  "reservationId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "reservationId": "uuid",
   "carModel": "Toyota Camry",
   "carType": "SEDAN",
   "startDate": "2025-07-01T10:00:00",
@@ -96,46 +100,69 @@ POST /api/v1/reservations
 }
 ```
 
-## Car Fleet (Seed Data)
+---
 
-| Type  | Models                              | Count |
-|-------|-------------------------------------|-------|
-| SEDAN | Toyota Camry, Honda Accord, VW Passat | 3   |
-| SUV   | Ford Explorer, Toyota RAV4          | 2     |
-| VAN   | Ford Transit, Mercedes Sprinter     | 2     |
+# Running the Project
 
-## Business Rules
+## Start database
 
-- Reservation must be made at least **1 hour in advance**
-- Maximum rental period is **90 days**
-- A car is only reserved if it is **available for the entire requested period** — no overlapping reservations
-- Concurrent reservation attempts are handled safely via **pessimistic locking** at the database level
+```
+docker compose up -d
+```
 
-## Running Tests
+## Run application
 
-```bash
+```
+./mvnw spring-boot:run
+```
+
+The API will start on:
+
+```
+http://localhost:8080
+```
+
+Liquibase automatically applies the database schema and seed data on startup.
+
+---
+
+# Testing
+
+Run tests with:
+
+```
 ./mvnw test
 ```
 
-Tests use **Testcontainers** — a real PostgreSQL container is spun up automatically. No manual setup required.
+Integration tests use **Testcontainers**, which automatically starts a real PostgreSQL container during the test run.
 
-### Test coverage
+### Unit Tests (`ReservationServiceTest`)
 
-| Test | Description |
-|------|-------------|
-| `shouldCreateReservationSuccessfully` | Happy path — 201 returned with correct body |
-| `shouldReturn409WhenNoCarAvailable` | All cars of type taken — 409 returned |
-| `shouldReturn400WhenStartDateIsInPast` | Past start date — 400 with validation error |
-| `shouldReturn400WhenCarTypeIsNull` | Missing car type — 400 with validation error |
-| `shouldReuseExistingRenterOnSecondReservation` | Same email reuses existing renter row |
+* successful reservation creation with response mapping
+* new renter creation when email not found
+* renter reuse when email already exists
+* rejection when start date is less than 1 hour from now
+* rejection when rental period exceeds 90 days
+* boundary test: exactly 90 days is accepted
+* CarNotAvailableException when no cars of requested type are free
 
-## Known Gaps
+### Integration Tests (`ReservationControllerIntegrationTest`)
 
-These are intentionally out of scope for the assessment but would be required in production:
+* successful reservation via API
+* 409 Conflict when no cars available
+* 400 Bad Request for past start date
+* 400 Bad Request for null car type and null numberOfDays
+* renter reuse on second reservation
+* concurrent reservation handling with pessimistic locking
 
-- **No authentication** — Spring Security with JWT would gate all endpoints
-- **No cancellation endpoint** — `DELETE /api/v1/reservations/{id}` with cancellation window rules
-- **No GET endpoints** — fetching reservations by ID or filtering by type/date
-- **Fleet size in DB** — currently seeded via Liquibase; a real system would manage fleet dynamically
-- **Timezone handling** — `LocalDateTime` is timezone-naive; a multi-branch international system would use `ZonedDateTime` with a branch timezone field
-- **Index on reservation** — `(car_id, start_date)` index would improve availability query performance at scale
+---
+
+# Possible Improvements
+
+Features that could be added in a production system:
+
+* Authentication and authorization (Spring Security + JWT)
+* Reservation cancellation endpoint
+* Additional GET endpoints for querying reservations
+* Database indexing on `reservation(car_id, start_date, end_date)` for performance
+* Timezone-aware reservation handling

@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
@@ -22,12 +23,16 @@ public class ReservationService {
     private final CarRepository carRepository;
     private final RenterRepository renterRepository;
     private final ReservationRepository reservationRepository;
+    private final Clock clock;
 
     @Transactional
     public ReservationResponse createReservation(final ReservationRequest request) {
-        validateRentalPeriod(request.startDate(), request.endDate());
+        final LocalDateTime startDate = request.startDate();
+        final LocalDateTime endDate = startDate.plusDays(request.numberOfDays());
 
-        final Car car = carRepository.findAvailableCar(request.carType(), request.startDate(), request.endDate())
+        validateRentalPeriod(startDate, endDate);
+
+        final Car car = carRepository.findAvailableCar(request.carType(), startDate, endDate)
                 .orElseThrow(() -> new CarNotAvailableException("No " + request.carType() + " available for these dates."));
 
         final Renter renter = renterRepository.findByEmail(request.renterEmail())
@@ -39,8 +44,8 @@ public class ReservationService {
                 Reservation.builder()
                         .car(car)
                         .renter(renter)
-                        .startDate(request.startDate())
-                        .endDate(request.endDate())
+                        .startDate(startDate)
+                        .endDate(endDate)
                         .build()
         );
 
@@ -48,7 +53,10 @@ public class ReservationService {
     }
 
     private void validateRentalPeriod(final LocalDateTime startDate, final LocalDateTime endDate) {
-        if (startDate.isBefore(LocalDateTime.now().plusHours(1))) {
+        if (!endDate.isAfter(startDate)) {
+            throw new IllegalArgumentException("End date must be after start date");
+        }
+        if (startDate.isBefore(LocalDateTime.now(clock).plusHours(1))) {
             throw new IllegalArgumentException("Reservation must be made at least 1 hour in advance");
         }
         if (endDate.isAfter(startDate.plusDays(90))) {

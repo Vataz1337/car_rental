@@ -9,6 +9,6 @@ public record ReservationRequest(
         @NotBlank String renterName,
         @Email @NotBlank String renterEmail,
         @NotNull CarType carType,
-        @NotNull @Future LocalDateTime startDate,
-        @NotNull LocalDateTime endDate
+        @NotNull LocalDateTime startDate,
+        @NotNull @Positive Integer numberOfDays
 ) {}
